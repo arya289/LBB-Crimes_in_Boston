@@ -1,0 +1,339 @@
+---
+title: "CRIMES IN BOSTON ANALYSIS"
+author: "Arya Andhika"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+#Library Needed
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(ggthemes)
+library(ggmosaic)
+library(scales)
+library(RColorBrewer)
+
+#Reading Data
+boston <- read.csv("Data Source/crime.csv")
+master.boston <- boston
+#boston <-  master.boston #when need to recall data
+
+#Set some colors
+cbPalette <- c("steelblue2", "springgreen2", "yellow2", "brown2")
+```
+
+## Take A Look the Data Type of "Crime in Boston" Data"
+```{r}
+str(boston)
+```
+
+## Change the Data Type of "OCCURRED_ON_DATE" 
+```{r}
+boston$INCIDENT_NUMBER <- as.character(boston$INCIDENT_NUMBER) #change the type into chr because unique
+boston$OCCURRED_ON_DATE <- ymd_hms(boston$OCCURRED_ON_DATE,tz = "America/New_York") # change into date format
+```
+
+## Change the Data Type of "OFFENSE_CODE" and "REPORTING_AREA" into Factor (Repeated)
+```{r}
+boston$OFFENSE_CODE <- as.factor(boston$OFFENSE_CODE)
+boston$REPORTING_AREA <- as.factor(boston$REPORTING_AREA)
+```
+
+## Take A Look the Summary of "Crime in Boston" Data"
+```{r}
+summary(boston)
+```
+
+## Clean Up the "NA's" and "Blank" from Data
+```{r}
+boston <- boston[complete.cases(boston), ]
+boston <- boston[!(boston$DISTRICT == ""), ]
+```
+
+## Change Month form numeric format into Abb. Month and Reorder Them
+```{r}
+boston$MONTH <- as.factor(month.abb[boston$MONTH])
+boston$MONTH <- factor(boston$MONTH, levels=c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")) #reordering Level Month
+```
+
+## DAY_OF_WEEK stored in long format and not orederd
+
+```{r}
+boston$DAY_OF_WEEK <- wday(boston$OCCURRED_ON_DATE,
+                           label = T,
+                           abbr = T,
+                           week_start = 1)
+```
+
+## Replace Missing Values in "SHOOTING" with "N"
+```{r}
+boston$SHOOTING <- as.factor(sub("^$", "N", boston$SHOOTING))
+```
+
+## Clean Up the Long and Lat Anomalies 
+```{r}
+boston <- boston[!(boston$Lat == -1 & boston$Long == -1), ]
+```
+
+## Remove unused levels
+```{r}
+boston <- droplevels(boston) 
+```
+
+
+##Simple Exploratory Data Analysis
+
+Take a glimpse look at Crime Boston Data to find pattern or interesting findings
+
+
+### By Year
+```{r}
+ggplot(boston, aes(x = YEAR)) +
+  geom_bar(fill = "royalblue2", col = "mediumblue") +
+  theme_igray() +
+  labs(x = NULL, y = NULL,
+       title = "Number of Crimes in Boston",
+       subtitle = "During Year of 2015 - 2019") +
+  geom_text(aes(label=comma(..count..)),stat="count", position=position_dodge(0.9),vjust=-0.5) +
+  scale_y_continuous(labels=comma)
+```
+
+We can see from the chart that Crimes in Boston Occured mostly in 2016 - 2017
+
+
+### By Month
+```{r}
+ggplot(boston, aes(x = MONTH)) +
+  geom_bar(fill = "royalblue2", col = "mediumblue") +
+  theme_igray() +
+  labs(x = NULL, y = NULL,
+       title = "Number of Crimes in Boston by Month",
+       subtitle = "During Year of 2015 - 2019") +
+   geom_text(aes(label=comma(..count..)),stat="count", position=position_dodge(0.9),vjust=-0.5) +
+   scale_y_continuous(labels=comma)
+```
+
+Crimes in Bostod peaked at July
+
+
+### By Season
+
+Since there are 4 seasons in US, it will be interesting to see whether the seasons may affect the Crimes Rate
+```{r}
+
+# Create Function to divide 12 months into 4 seasons
+season <- function(m){
+                      if(m == "Mar" | m == "Apr" | m == "May"){
+                        m <- "SPRING"
+                      }else if(m == "Jun" | m == "Jul" | m == "Aug"){
+                        m <- "SUMMER"
+                      }else if(m == "Sep" | m == "Oct" | m == "Nov"){
+                        m <- "AUTUMN"
+                      }else{
+                        m <- "WINTER"
+                      }
+                      
+                    }
+
+# Apply it to Month and create new Column
+boston$SEASON_OCCURED <- as.factor(sapply(boston$MONTH, season))
+
+# Reorder it
+boston$SEASON_OCCURED <- ordered(boston$SEASON_OCCURED,
+                                                   levels = c("WINTER",
+                                                              "SPRING",
+                                                              "SUMMER",
+                                                              "AUTUMN"))
+
+ggplot(boston, aes(x = MONTH, fill = SEASON_OCCURED)) +
+  geom_bar() +
+  theme_igray() +
+  labs(x = NULL, y = NULL,
+       title = "Number of Crimes in Boston by Season",
+       subtitle = "During Year of 2015 - 2019",
+       fill = "Season") +
+   geom_text(aes(label=comma(..count..)),stat="count", position=position_dodge(0.9), vjust=-0.5, size = 3) +
+   scale_y_continuous(labels=comma) +
+   scale_fill_manual(values = cbPalette[1:4]) +
+   theme(legend.position = "bottom",
+         legend.title = element_text(size = 8),
+         legend.text = element_text(size = 8))
+
+```
+
+Summer is the season where Crimes in Boston Mostly Occured
+
+### By Day of Week
+```{r}
+ggplot(boston, aes(x = DAY_OF_WEEK)) +
+  geom_bar(fill = "royalblue2", col = "mediumblue") +
+  theme_igray() +
+  labs(x = NULL, y = NULL,
+       title = "Number of Crimes in Boston by Day of Week",
+       subtitle = "During Year of 2015 - 2019") +
+   geom_text(aes(label=comma(..count..)),stat="count", position=position_dodge(0.9),vjust=-0.5) +
+   scale_y_continuous(labels=comma)
+```
+
+Crimes in Boston occur mostly in weekday, and peaked during Friday
+
+### By Time
+```{r}
+event <- function(x){
+                      if(x < 6){
+                        x <- "12AM to 6AM"
+                      }else if(x >= 6 & x < 12){
+                        x <- "6AM to 12PM"
+                      }else if(x >= 12 & x < 18){
+                        x <- "12PM to 6PM"
+                      }else{
+                        x <- "6PM to 12AM"
+                      }
+                      
+                    }
+
+boston$TIME_OCCURED <- as.factor(sapply(boston$HOUR, event))
+
+boston$TIME_OCCURED <- ordered(boston$TIME_OCCURED,
+                                                   levels = c("12AM to 6AM",
+                                                              "6AM to 12PM",
+                                                              "12PM to 6PM",
+                                                              "6PM to 12AM"))
+
+ggplot(boston, aes(x = TIME_OCCURED)) +
+  geom_bar(fill = "royalblue2", col = "mediumblue") +
+  theme_igray() +
+  labs(x = NULL, y = NULL,
+       title = "Number of Crimes in Boston by Time Occured",
+       subtitle = "During Year of 2015 - 2019") +
+   geom_text(aes(label=comma(..count..)),stat="count", position=position_dodge(0.9),vjust=-0.5) +
+   scale_y_continuous(labels=comma)
+```
+
+Crimes happen mostly at 12PM - 6PM
+
+
+### Correlation between Day of Week and the Time when Crimes Occur
+```{r}
+ggplot(boston) +
+  geom_mosaic(aes(x = product(DAY_OF_WEEK), fill=TIME_OCCURED)) +
+  labs(x = NULL, y = NULL,
+       title = "Number of Crimes in Boston by Day of Week vs Time Occured",
+       subtitle = "During Year of 2015 - 2019",
+       fill = "Time Occured") +
+  theme(legend.position = "bottom",
+         legend.title = element_text(size = 8),
+         legend.text = element_text(size = 8))
+```
+
+On the weekday, Crimes in Boston happen during the same period. But interesting thing happen at weekend, there is some shifting of time occured, from 6AM-12PM into 12AM to 6AM.
+
+
+## Take a look the most occured Offense Type, let's say they occur more than 10k Cases
+```{r}
+boston10k <- as.data.frame(table(OFFENSE_TYPE = boston$OFFENSE_CODE_GROUP))
+boston10k <- boston10k[boston10k$Freq >= 10000, ]
+boston10k <- boston10k[order(boston10k$Freq, decreasing = T),]
+boston10k
+```
+
+```{r}
+boston10k <- boston10k[boston10k$OFFENSE_TYPE != "Other", ]
+```
+
+We would like to take out Other since it may consists of few Offense Types
+
+
+## Plot It Into Chart
+```{r}
+ggplot(boston10k, aes(x = reorder(OFFENSE_TYPE, Freq), y = Freq)) +
+  geom_col(aes(fill=OFFENSE_TYPE)) +
+  coord_flip() +
+  theme_igray() +
+  labs(x = NULL, y = NULL,
+       title = "Top 10 Offense Type Numbers in Boston Crimes",
+       subtitle = "During Year of 2015 - 2019") +
+  scale_fill_brewer(palette = "Paired") +
+  theme(legend.position = "none") +
+  scale_y_continuous(labels=comma)
+```
+
+
+## Location Analysis
+
+### By Districts
+```{r}
+
+newlev <- names(table(boston$DISTRICT))[order(table(boston$DISTRICT), decreasing = T)]
+boston$DISTRICT <- factor(boston$DISTRICT, levels=newlev)
+
+ggplot(boston, aes(x = DISTRICT)) +
+  geom_bar(fill = "royalblue2", col = "mediumblue") +
+  theme_igray() +
+  labs(x = NULL, y = NULL,
+       title = "Number of Crimes in Boston on Every Districts",
+       subtitle = "During Year of 2015 - 2019") +
+   geom_text(aes(label=comma(..count..)),stat="count", position=position_dodge(0.9),vjust=-0.5) +
+   scale_y_continuous(labels=comma)
+```
+
+B2 is the District with most Cases, and A15 is the safest
+
+
+### Districs vs Offense Type
+We would like to see, the distribution of Top Numbers Offense Type (more than 10k cases) in every districts
+
+```{r}
+bostonsort <- boston[which(boston$OFFENSE_CODE_GROUP %in% boston10k$OFFENSE_TYPE), ] # subset boston dataset which only contains Top Offense Type
+bostonsort <- droplevels(bostonsort) # remove unused levels
+
+sortlev <- names(table(bostonsort$DISTRICT))[order(table(bostonsort$DISTRICT), decreasing = T)] #sort form largest - smallest
+bostonsort$DISTRICT <- factor(bostonsort$DISTRICT, levels=sortlev) # set as factor
+
+ggplot(bostonsort) +
+  geom_mosaic(aes(x = product(DISTRICT), fill=OFFENSE_CODE_GROUP)) +
+  labs(x = NULL, y = NULL,
+       title = "Crimes in Boston by Offense Type in Every Districts",
+       subtitle = "During Year of 2015 - 2019",
+       fill = "Time Occured") +
+  theme_igray() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(size = 7)) +
+  scale_fill_brewer(palette = "Paired")
+
+
+```
+
+- As we can see, the order of the District is the same with the unsorted one. 
+- Motor Vehicle Accident Response is the most occured case on every distrcit
+- Larceny should be main concern at D4 and A1
+
+
+### Number of Crimes on Every Date
+
+```{r}
+#Change Format Date from POSIXct into Date
+bostonsort$OCCURRED_ON_DATE <- as.Date(as.POSIXct(bostonsort$OCCURRED_ON_DATE,tz = "America/New_York"))
+
+
+#count numbers of crimes by date of occurance
+bostoncount <- bostonsort %>% 
+                  group_by(OCCURRED_ON_DATE) %>% 
+                  summarise(count = n()) %>% 
+                  ungroup()
+
+ggplot(bostoncount, aes(x = OCCURRED_ON_DATE, y = count)) +
+  geom_point(col = "royalblue2") +
+  labs(x = NULL, y = NULL,
+       title = "Count of Crimes in Boston by Date of Occurance",
+       subtitle = "During Year of 2015 - 2019") +
+  theme_igray()
+
+```
+
+Same like as shown by Month, the numbers of crimes mostly occured on mid year, and decline at the end of the year
